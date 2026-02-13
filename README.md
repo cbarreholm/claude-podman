@@ -6,12 +6,15 @@ Claude for the security-conscious: run [claude-code, the claude cli tool](https:
 Installation
 ----
 
-First, download and install podman. Installation is easy and secure with curl
+First, download and install podman. Then install the script with curl. Set
+`REPO` to match your fork (e.g. `?????/claude-podman`):
 
 ```sh
+REPO=evancarroll/claude-podman
 curl --proto '=https' --tlsv1.2 -sSf \
-  https://raw.githubusercontent.com/EvanCarroll/claude-podman/refs/heads/main/bin/claude |
-  sudo tee /usr/local/bin/claude-podman
+  "https://raw.githubusercontent.com/$REPO/refs/heads/main/bin/claude" |
+  sed "s|^REPO_NAME=.*|REPO_NAME=$REPO|" |
+  sudo tee /usr/local/bin/claude-podman > /dev/null
 sudo chmod a+x /usr/local/bin/claude-podman
 ```
 
