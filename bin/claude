@@ -1,7 +1,9 @@
 #!/bin/bash
 
+# GH Repo - Replace to run a fork
+REPO_NAME=evancarroll/claude-podman
 # Default image
-IMAGE="ghcr.io/evancarroll/claude-podman/claude-code:latest"
+IMAGE="ghcr.io/$REPO_NAME/claude-code:latest"
 NAME="claudecode-$(uuidgen -r | cut -d- -f1)"
 INIT_SCRIPT=""
 APK_PACKAGES=""
@@ -27,7 +29,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--self-update)
 		curl --proto '=https' --tlsv1.2 -sSf \
-			https://raw.githubusercontent.com/EvanCarroll/claude-podman/refs/heads/main/bin/claude |
+			"https://raw.githubusercontent.com/$REPO_NAME/refs/heads/main/bin/claude" |
 			sudo tee /usr/local/bin/claude-podman >/dev/null
 		sudo chmod a+x /usr/local/bin/claude-podman
 		echo "Updated"
