@@ -6,7 +6,7 @@ IMAGE=claude-code
 REPO_NAME="EvanCarroll/claude-podman"
 
 # Process arguments
-while [[ $# -gt 0 ]]; do
+while [ "$#" -gt 0 ]; do
 	case "$1" in
 	--help)
 		cat <<-'EOT'
