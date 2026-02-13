@@ -29,11 +29,13 @@ jobs:
       env:
         STORAGE_DRIVER: vfs
       run: |
+        # Extract <owner>/<repository-name> in lower case
+        REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
         # Run the build script
-        VERSION=$(./devops/build-image.sh | tail -n2 | head -n1 | cut -d: -f2)
+        VERSION=$(./devops/build-image.sh -repo-name $REPO_NAME | tail -n2 | head -n1 | cut -d: -f2)
         
         # Tag the image for GHCR
-        REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
         buildah tag claude-code \
           "ghcr.io/$REPO_NAME/claude-code:$VERSION" \
           "ghcr.io/$REPO_NAME/claude-code:latest"
