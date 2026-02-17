@@ -23,6 +23,7 @@ while [[ $# -gt 0 ]]; do
 			  --init-script FILE   Execute initialization script
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
 			  --podman-arg ARG     Pass additional argument to podman
+			  --version            Show the Claude Code version in the image
 			  --help               Display this help message
 		EOT
 		exit 0
@@ -51,6 +52,15 @@ while [[ $# -gt 0 ]]; do
 	--podman-arg)
 		PODMAN_ARGS="$PODMAN_ARGS $2"
 		shift 2
+		;;
+	--version)
+		podman run \
+			--rm \
+			--user claude \
+			--userns=keep-id:uid=1001,gid=1001 \
+			$PODMAN_ARGS \
+			"$IMAGE" --version
+		exit 0
 		;;
 	*)
 		break

@@ -50,18 +50,14 @@ test_claude_uid() {
 run_test "Claude user has UID 1000" \
 	test_claude_uid
 
-# 5. Claude responds through full wrapper invocation (catches silent hangs)
-test_wrapper_invocation() {
+# 5. Wrapper script starts claude and it responds
+test_wrapper() {
 	local output
-	output=$(timeout 30 podman run \
-		--rm \
-		--user claude \
-		--userns=keep-id:uid=1000,gid=1000 \
-		"$IMAGE" --version 2>&1)
+	output=$(timeout 30 ./bin/claude --local --version 2>&1)
 	echo "$output" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'
 }
-run_test "Claude responds through full wrapper invocation" \
-	test_wrapper_invocation
+run_test "Wrapper script starts claude" \
+	test_wrapper
 
 # Summary
 echo ""
