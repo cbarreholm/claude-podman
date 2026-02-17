@@ -1,7 +1,6 @@
 #!/bin/sh
 
-CONTAINER=$(buildah from docker.io/node:current-alpine)
-CLAUDE_VERSION=$(npm info @anthropic-ai/claude-code --json | jq .version -r)
+CONTAINER=$(buildah from docker.io/alpine:latest)
 IMAGE=claude-code
 REPO_NAME="EvanCarroll/claude-podman"
 
@@ -30,25 +29,27 @@ while [ "$#" -gt 0 ]; do
 	esac
 done
 
-#apk add --no-cache dash
+# Install dependencies and create user
 buildah run "$CONTAINER" sh <<EOT
-	npm config set os linux
-	apk add --no-cache zsh
-	npm --os=linux install --omit=dev --no-audit --no-fund -g @anthropic-ai/claude-code
-	apk cache clean
-	rm -rf /usr/local/lib/node_modules/npm/man/
-	find . -type f -name '*.md' -delete 2> /dev/null
+	apk add --no-cache bash curl libgcc libstdc++ ripgrep
 	adduser -D claude
 EOT
 
+# Install Claude Code using native installer as the claude user
+buildah run --user claude "$CONTAINER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+
+# Get the installed version
+CLAUDE_VERSION=$(buildah run --user claude "$CONTAINER" /home/claude/.local/bin/claude --version 2>/dev/null | head -1 | awk '{print $1}')
+
 buildah config \
 	--author "Evan Carroll" \
-	--env "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-	--env "SHELL=/bin/zsh" \
+	--env "PATH=/home/claude/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+	--env "SHELL=/bin/bash" \
 	--env "DISABLE_TELEMETRY=1" \
 	--env "DISABLE_AUTOUPDATER=1" \
+	--env "USE_BUILTIN_RIPGREP=0" \
 	--cmd "" \
-	--entrypoint '[ "/usr/local/bin/node", "--no-warnings", "--enable-source-maps", "/usr/local/bin/claude" ]' \
+	--entrypoint '[ "/home/claude/.local/bin/claude" ]' \
 	--annotation "org.anthropic.claudecode.version=$CLAUDE_VERSION" \
 	--annotation "org.opencontainers.image.title=claude-code" \
 	--annotation "org.opencontainers.image.description=Claude Code on Alpine ready for rootless podman" \
