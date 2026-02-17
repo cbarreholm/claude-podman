@@ -26,6 +26,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build Image with buildah script
+      id: build
       env:
         STORAGE_DRIVER: vfs
       run: |
@@ -34,12 +35,19 @@ jobs:
 
         # Run the build script
         VERSION=$(./devops/build-image.sh -repo-name $REPO_NAME | tail -n2 | head -n1 | cut -d: -f2)
-        
+
         # Tag the image for GHCR
         buildah tag claude-code \
           "ghcr.io/$REPO_NAME/claude-code:$VERSION" \
           "ghcr.io/$REPO_NAME/claude-code:latest"
-        
-        # Push to GitHub Container Registry
-        buildah push "ghcr.io/$REPO_NAME/claude-code:$VERSION"
-        buildah push "ghcr.io/$REPO_NAME/claude-code:latest"
+
+        echo "repo_name=$REPO_NAME" >> "$GITHUB_OUTPUT"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Test image
+      run: ./tests/test-image.sh "${{ steps.build.outputs.version }}"
+
+    - name: Push to GitHub Container Registry
+      run: |
+        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-code:${{ steps.build.outputs.version }}"
+        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-code:latest"
