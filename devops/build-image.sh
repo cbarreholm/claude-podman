@@ -64,7 +64,7 @@ buildah commit \
 	--rm \
 	"$CONTAINER" "$IMAGE"
 
-buildah tag "$IMAGE" "$CLAUDE_VERSION"
+buildah tag "$IMAGE" "$IMAGE:$CLAUDE_VERSION"
 
 echo Done!
 echo ${IMAGE}:${CLAUDE_VERSION}
