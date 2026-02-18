@@ -8,6 +8,11 @@ NAME="claudecode-$(uuidgen -r | cut -d- -f1)"
 INIT_SCRIPT=""
 APK_PACKAGES=""
 PODMAN_ARGS=""
+RESTRICTED_NETWORK=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SQUID_IMAGE="docker.io/ubuntu/squid:6.6-24.04_edge"
+SQUID_NAME="claude-squid-$(uuidgen -r | cut -d- -f1)"
+NETWORK_NAME="claude-restricted-net"
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -23,6 +28,7 @@ while [[ $# -gt 0 ]]; do
 			  --init-script FILE   Execute initialization script
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
 			  --podman-arg ARG     Pass additional argument to podman
+			  --restricted-network Run with network restricted to Anthropic API endpoints only
 			  --version            Show the Claude Code version in the image
 			  --help               Display this help message
 		EOT
@@ -53,6 +59,10 @@ while [[ $# -gt 0 ]]; do
 		PODMAN_ARGS="$PODMAN_ARGS $2"
 		shift 2
 		;;
+	--restricted-network)
+		RESTRICTED_NETWORK=1
+		shift
+		;;
 	--version)
 		podman run \
 			--rm \
@@ -67,6 +77,39 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+# Set up restricted network if requested
+if [ -n "$RESTRICTED_NETWORK" ]; then
+	# Create internal network (no external access) if it doesn't exist
+	if ! podman network exists "$NETWORK_NAME" 2>/dev/null; then
+		podman network create --internal "$NETWORK_NAME"
+	fi
+
+	# Start Squid proxy on both the internal and default networks
+	# so it can relay traffic from the isolated Claude container to the internet
+	podman run \
+		--rm \
+		--name "$SQUID_NAME" \
+		--network "$NETWORK_NAME" \
+		--network podman \
+		--detach \
+		-v "${SCRIPT_DIR}/devops/squid.conf:/etc/squid/squid.conf:ro" \
+		"$SQUID_IMAGE"
+
+	# Add network and proxy env vars to Claude container args
+	PODMAN_ARGS="$PODMAN_ARGS --network=$NETWORK_NAME"
+	PODMAN_ARGS="$PODMAN_ARGS -e HTTPS_PROXY=http://${SQUID_NAME}:3128"
+	PODMAN_ARGS="$PODMAN_ARGS -e HTTP_PROXY=http://${SQUID_NAME}:3128"
+
+	# Cleanup trap: stop squid and remove network on exit
+	cleanup_restricted_network() {
+		podman stop "$SQUID_NAME" 2>/dev/null
+		podman network rm "$NETWORK_NAME" 2>/dev/null
+	}
+	trap cleanup_restricted_network EXIT
+fi
+
+echo "$NAME" >&2
 
 podman run \
 	-v "${HOME}/.claude:/home/claude/.claude" \
