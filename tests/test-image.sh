@@ -9,11 +9,13 @@ run_test() {
 	local name="$1"
 	shift
 	printf "TEST: %s ... " "$name"
-	if "$@"; then
+	local rc=0
+	"$@" || rc=$?
+	if [ "$rc" -eq 0 ]; then
 		echo "PASS"
 		PASS=$((PASS + 1))
 	else
-		echo "FAIL"
+		echo "FAIL (rc=$rc)"
 		FAIL=$((FAIL + 1))
 	fi
 }
@@ -77,7 +79,7 @@ test_restricted_network() {
 		sleep 1
 	done
 	rm -f "$stderr_file"
-	[ -z "$claude_container" ] && { kill "$wrapper_pid" 2>/dev/null; return 1; }
+	[ -z "$claude_container" ] && { kill "$wrapper_pid" 2>/dev/null; return 9; }
 
 	# Verify HTTPS_PROXY is set
 	local env_output
@@ -97,9 +99,9 @@ test_restricted_network() {
 	podman stop "$claude_container" >/dev/null 2>&1
 	wait "$wrapper_pid" 2>/dev/null
 
-	echo "$env_output" | grep -q "HTTPS_PROXY=http://.*:3128" || return 1
-	echo "$curl_blocked" | grep -q "exit_code=0" && return 1
-	echo "$curl_allowed" | grep -q "exit_code=0" || return 1
+	echo "$env_output" | grep -q "HTTPS_PROXY=http://.*:3128" || return 10
+	echo "$curl_blocked" | grep -q "exit_code=0" && return 11
+	echo "$curl_allowed" | grep -q "exit_code=0" || return 12
 	return 0
 }
 run_test "Restricted network blocks direct access and sets proxy" \
