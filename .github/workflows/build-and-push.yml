@@ -25,7 +25,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Build Image with buildah script
+    - name: Build Claude Code image
       id: build
       env:
         STORAGE_DRIVER: vfs
@@ -44,6 +44,21 @@ jobs:
         echo "repo_name=$REPO_NAME" >> "$GITHUB_OUTPUT"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+    - name: Build Squid proxy image
+      id: build-squid
+      env:
+        STORAGE_DRIVER: vfs
+      run: |
+        REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+
+        SQUID_VERSION=$(./devops/build-squid-image.sh --repo-name $REPO_NAME | tail -1 | cut -d: -f2)
+
+        buildah tag claude-squid \
+          "ghcr.io/$REPO_NAME/claude-squid:$SQUID_VERSION" \
+          "ghcr.io/$REPO_NAME/claude-squid:latest"
+
+        echo "squid_version=$SQUID_VERSION" >> "$GITHUB_OUTPUT"
+
     - name: Test image
       run: ./tests/test-image.sh "${{ steps.build.outputs.version }}"
 
@@ -51,3 +66,5 @@ jobs:
       run: |
         buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-code:${{ steps.build.outputs.version }}"
         buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-code:latest"
+        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-squid:${{ steps.build-squid.outputs.squid_version }}"
+        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-squid:latest"

@@ -9,10 +9,7 @@ INIT_SCRIPT=""
 APK_PACKAGES=""
 PODMAN_ARGS=""
 RESTRICTED_NETWORK=""
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SQUID_IMAGE="docker.io/ubuntu/squid:6.6-24.04_edge"
-SQUID_NAME="claude-squid-$(uuidgen -r | cut -d- -f1)"
-NETWORK_NAME="claude-restricted-net"
+SQUID_IMAGE="ghcr.io/$REPO_NAME/claude-squid:latest"
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -28,7 +25,7 @@ while [[ $# -gt 0 ]]; do
 			  --init-script FILE   Execute initialization script
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
 			  --podman-arg ARG     Pass additional argument to podman
-			  --restricted-network Run with network restricted to Anthropic API endpoints only
+			  --restricted-network Run with network restricted to Anthropic API endpoints only, using squid proxy
 			  --version            Show the Claude Code version in the image
 			  --help               Display this help message
 		EOT
@@ -45,6 +42,7 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--local)
 		IMAGE="localhost/claude-code:latest"
+		SQUID_IMAGE="localhost/claude-squid:latest"
 		shift
 		;;
 	--init-script)
@@ -80,6 +78,9 @@ done
 
 # Set up restricted network if requested
 if [ -n "$RESTRICTED_NETWORK" ]; then
+	SQUID_NAME="claude-squid-$(uuidgen -r | cut -d- -f1)"
+	NETWORK_NAME="claude-restricted-net"
+
 	# Create internal network (no external access) if it doesn't exist
 	if ! podman network exists "$NETWORK_NAME" 2>/dev/null; then
 		podman network create --internal "$NETWORK_NAME"
@@ -93,7 +94,6 @@ if [ -n "$RESTRICTED_NETWORK" ]; then
 		--network "$NETWORK_NAME" \
 		--network podman \
 		--detach \
-		-v "${SCRIPT_DIR}/devops/squid.conf:/etc/squid/squid.conf:ro" \
 		"$SQUID_IMAGE"
 
 	# Add network and proxy env vars to Claude container args
