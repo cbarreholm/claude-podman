@@ -8,6 +8,7 @@ NAME="claudecode-$(uuidgen -r | cut -d- -f1)"
 INIT_SCRIPT=""
 APK_PACKAGES=""
 PODMAN_ARGS=""
+NETWORK=""
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -22,6 +23,8 @@ while [[ $# -gt 0 ]]; do
 			  --local              Use local image 'claude-code:latest' instead of remote
 			  --init-script FILE   Execute initialization script
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
+			  --network NAME       Join a dedicated podman network (created if missing) so
+			                       Claude can reach other containers on it by name via DNS
 			  --podman-arg ARG     Pass additional argument to podman
 			  --version            Show the Claude Code version in the image
 			  --help               Display this help message
@@ -49,6 +52,10 @@ while [[ $# -gt 0 ]]; do
 		APK_PACKAGES="$2"
 		shift 2
 		;;
+	--network)
+		NETWORK="$2"
+		shift 2
+		;;
 	--podman-arg)
 		PODMAN_ARGS="$PODMAN_ARGS $2"
 		shift 2
@@ -68,6 +75,15 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+# Join a dedicated network, creating it if it doesn't exist yet
+NETWORK_ARG=""
+if [ -n "$NETWORK" ]; then
+	if ! podman network exists "$NETWORK"; then
+		podman network create "$NETWORK"
+	fi
+	NETWORK_ARG="--network $NETWORK"
+fi
+
 podman run \
 	-v "${HOME}/.claude:/home/claude/.claude" \
 	-v "${HOME}/.claude.json:/home/claude/.claude.json" \
@@ -79,6 +95,7 @@ podman run \
 	--detach \
 	--user claude \
 	--userns=keep-id:uid=1000,gid=1000 \
+	$NETWORK_ARG \
 	$PODMAN_ARGS \
 	"$IMAGE" "$@"
 

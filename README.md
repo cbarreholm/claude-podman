@@ -53,3 +53,22 @@ claude-podman \
 	--apk-packages kubectl \
 	--podman-arg "-v $HOME/.kube/config:/home/claude/.kube/config"
 ```
+
+Sharing a network with another container
+----
+
+By default the container uses podman's rootless network and can't reach other
+containers by name. Use `--network NAME` to join a dedicated, user-defined
+podman network (it's created automatically if it doesn't exist). Any other
+container on the same network is then reachable from inside by its container
+name, thanks to podman's built-in DNS.
+
+```sh
+# Start the service Claude should reach, on a shared network
+podman run -d --name myservice --network claude-net some/image
+
+# Run Claude on the same network (creates claude-net if needed)
+claude-podman --network claude-net
+```
+
+Inside the container, Claude can now reach the service at `http://myservice:<port>`.
