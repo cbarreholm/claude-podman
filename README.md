@@ -1,39 +1,66 @@
-claude-podman
+opencode-podman
 ====
 
-Claude for the security-conscious: run [claude-code, the claude cli tool](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview), in a rootless [podman](https://podman.io/) container.
+[opencode](https://opencode.ai/) for the security-conscious: run the opencode
+terminal agent in a rootless [podman](https://podman.io/) container.
+
+This is a fork of [claude-podman](https://github.com/EvanCarroll/claude-podman)
+adapted for opencode.
 
 Installation
 ----
 
 First, download and install podman. Then install the script with curl. Set
-`REPO` to match your fork (e.g. `?????/claude-podman`):
+`REPO` to match your fork (e.g. `?????/opencode-podman`):
 
 ```sh
-REPO=evancarroll/claude-podman
+REPO=ingby/opencode-podman
 curl --proto '=https' --tlsv1.2 -sSf \
-  "https://raw.githubusercontent.com/$REPO/refs/heads/main/bin/claude" |
+  "https://raw.githubusercontent.com/$REPO/refs/heads/main/bin/opencode" |
   sed "s|^REPO_NAME=.*|REPO_NAME=$REPO|" |
-  sudo tee /usr/local/bin/claude-podman > /dev/null
-sudo chmod a+x /usr/local/bin/claude-podman
+  sudo tee /usr/local/bin/opencode-podman > /dev/null
+sudo chmod a+x /usr/local/bin/opencode-podman
 ```
 
-Now you can just run `claude-podman`.
+Now you can just run `opencode-podman`.
 
 Benefits
 ----
 
 This provides the following benefits:
 
-* Claude only gets file access to
+* opencode only gets file access to
 	* Files in the present working directory
-	* `$HOME/.claude.json`
-	* `$HOME/.claude`
-* Claude can only execute the files that exist in the image.
+	* `$HOME/.config/opencode` (config)
+	* `$HOME/.local/share/opencode` (auth, sessions)
+	* `$HOME/.local/state/opencode` (state)
+* opencode can only execute the files that exist in the image.
 
 This image runs in rootless podman, and even inside rootless podman it runs as
-a non-root user inside the container. Claude code is maximally locked down and
-can't even update itself!
+a non-root user inside the container.
+
+Supply chain hardening
+----
+
+The image does **not** use opencode's `curl | bash` installer, and opencode
+cannot update itself:
+
+* The build downloads a single, explicitly pinned release tarball
+  (`opencode-linux-*-musl.tar.gz`) from GitHub. The version **and** its
+  sha256 checksum are committed in `devops/build-image.sh`; the build fails
+  if the downloaded artifact does not match.
+* Autoupdate is disabled three ways:
+	* `OPENCODE_DISABLE_AUTOUPDATE=true` is baked into the image (authoritative
+	  — it wins even if a mounted config says otherwise).
+	* The image ships `~/.config/opencode/opencode.json` with
+	  `"autoupdate": false`, and the wrapper writes the same config on the
+	  host if none exists yet.
+	* The binary lives at `/usr/local/bin/opencode`, owned by root, so the
+	  container user could not overwrite it anyway.
+
+To upgrade opencode: edit `OPENCODE_VERSION` and the two `OPENCODE_SHA256_*`
+values in `devops/build-image.sh` (download the new tarballs and run
+`sha256sum` on them), then rebuild.
 
 Customizing the runtime
 ----
@@ -46,12 +73,13 @@ Need to add packages to the container, or run an init script? no problem
 ```
 
 
-For example, let's say you're using kubernetes and you do want claude to be able to troubleshoot it.
+For example, let's say you're using kubernetes and you do want opencode to be
+able to troubleshoot it.
 
 ```sh
-claude-podman \
+opencode-podman \
 	--apk-packages kubectl \
-	--podman-arg "-v $HOME/.kube/config:/home/claude/.kube/config"
+	--podman-arg "-v $HOME/.kube/config:/home/opencode/.kube/config"
 ```
 
 Sharing a network with another container
@@ -64,11 +92,12 @@ container on the same network is then reachable from inside by its container
 name, thanks to podman's built-in DNS.
 
 ```sh
-# Start the service Claude should reach, on a shared network
-podman run -d --name myservice --network claude-net some/image
+# Start the service opencode should reach, on a shared network
+podman run -d --name myservice --network opencode-net some/image
 
-# Run Claude on the same network (creates claude-net if needed)
-claude-podman --network claude-net
+# Run opencode on the same network (creates opencode-net if needed)
+opencode-podman --network opencode-net
 ```
 
-Inside the container, Claude can now reach the service at `http://myservice:<port>`.
+Inside the container, opencode can now reach the service at
+`http://myservice:<port>`.

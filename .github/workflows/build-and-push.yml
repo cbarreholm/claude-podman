@@ -34,12 +34,12 @@ jobs:
         REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
 
         # Run the build script
-        VERSION=$(./devops/build-image.sh -repo-name $REPO_NAME | tail -n2 | head -n1 | cut -d: -f2)
+        VERSION=$(./devops/build-image.sh --repo-name $REPO_NAME | tail -n2 | head -n1 | cut -d: -f2)
 
         # Tag the image for GHCR
-        buildah tag claude-code \
-          "ghcr.io/$REPO_NAME/claude-code:$VERSION" \
-          "ghcr.io/$REPO_NAME/claude-code:latest"
+        buildah tag opencode \
+          "ghcr.io/$REPO_NAME/opencode:$VERSION" \
+          "ghcr.io/$REPO_NAME/opencode:latest"
 
         echo "repo_name=$REPO_NAME" >> "$GITHUB_OUTPUT"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -48,6 +48,7 @@ jobs:
       run: ./tests/test-image.sh "${{ steps.build.outputs.version }}"
 
     - name: Push to GitHub Container Registry
+      if: github.event_name != 'pull_request'
       run: |
-        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-code:${{ steps.build.outputs.version }}"
-        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/claude-code:latest"
+        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/opencode:${{ steps.build.outputs.version }}"
+        buildah push "ghcr.io/${{ steps.build.outputs.repo_name }}/opencode:latest"

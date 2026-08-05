@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # GH Repo - Replace to run a fork
-REPO_NAME=evancarroll/claude-podman
+REPO_NAME=ingby/opencode-podman
 # Default image
-IMAGE="ghcr.io/$REPO_NAME/claude-code:latest"
-NAME="claudecode-$(uuidgen -r | cut -d- -f1)"
+IMAGE="ghcr.io/$REPO_NAME/opencode:latest"
+NAME="opencode-$(uuidgen -r | cut -d- -f1)"
 INIT_SCRIPT=""
 APK_PACKAGES=""
 PODMAN_ARGS=""
@@ -15,33 +15,33 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--help)
 		cat <<-'EOT'
-			Usage: claude [OPTIONS]
+			Usage: opencode-podman [OPTIONS]
 
-			Run Claude Code in a Podman container
+			Run opencode in a Podman container
 
 			Options:
-			  --local              Use local image 'claude-code:latest' instead of remote
+			  --local              Use local image 'opencode:latest' instead of remote
 			  --init-script FILE   Execute initialization script
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
 			  --network NAME       Join a dedicated podman network (created if missing) so
-			                       Claude can reach other containers on it by name via DNS
+			                       opencode can reach other containers on it by name via DNS
 			  --podman-arg ARG     Pass additional argument to podman
-			  --version            Show the Claude Code version in the image
+			  --version            Show the opencode version in the image
 			  --help               Display this help message
 		EOT
 		exit 0
 		;;
 	--self-update)
 		curl --proto '=https' --tlsv1.2 -sSf \
-			"https://raw.githubusercontent.com/$REPO_NAME/refs/heads/main/bin/claude" |
+			"https://raw.githubusercontent.com/$REPO_NAME/refs/heads/main/bin/opencode" |
 			sed "s|^REPO_NAME=.*|REPO_NAME=$REPO_NAME|" |
-			sudo tee /usr/local/bin/claude-podman >/dev/null
-		sudo chmod a+x /usr/local/bin/claude-podman
+			sudo tee /usr/local/bin/opencode-podman >/dev/null
+		sudo chmod a+x /usr/local/bin/opencode-podman
 		echo "Updated"
 		exit 0
 		;;
 	--local)
-		IMAGE="localhost/claude-code:latest"
+		IMAGE="localhost/opencode:latest"
 		shift
 		;;
 	--init-script)
@@ -63,8 +63,8 @@ while [[ $# -gt 0 ]]; do
 	--version)
 		podman run \
 			--rm \
-			--user claude \
-			--userns=keep-id:uid=1001,gid=1001 \
+			--user opencode \
+			--userns=keep-id:uid=1000,gid=1000 \
 			$PODMAN_ARGS \
 			"$IMAGE" --version
 		exit 0
@@ -84,16 +84,35 @@ if [ -n "$NETWORK" ]; then
 	NETWORK_ARG="--network $NETWORK"
 fi
 
+# opencode keeps auth/sessions, config, and state in XDG directories;
+# create them on the host so podman doesn't have to
+mkdir -p \
+	"${HOME}/.config/opencode" \
+	"${HOME}/.local/share/opencode" \
+	"${HOME}/.local/state/opencode"
+
+# Disable autoupdate in the host config unless one already exists (the
+# image also sets OPENCODE_DISABLE_AUTOUPDATE, which wins regardless)
+if [ ! -f "${HOME}/.config/opencode/opencode.json" ]; then
+	cat > "${HOME}/.config/opencode/opencode.json" <<-'EOT'
+		{
+		  "$schema": "https://opencode.ai/config.json",
+		  "autoupdate": false
+		}
+	EOT
+fi
+
 podman run \
-	-v "${HOME}/.claude:/home/claude/.claude" \
-	-v "${HOME}/.claude.json:/home/claude/.claude.json" \
+	-v "${HOME}/.config/opencode:/home/opencode/.config/opencode" \
+	-v "${HOME}/.local/share/opencode:/home/opencode/.local/share/opencode" \
+	-v "${HOME}/.local/state/opencode:/home/opencode/.local/state/opencode" \
 	-v "${PWD}:${PWD}" \
 	-w "$PWD" \
 	--rm \
 	--name "$NAME" \
 	-ti \
 	--detach \
-	--user claude \
+	--user opencode \
 	--userns=keep-id:uid=1000,gid=1000 \
 	$NETWORK_ARG \
 	$PODMAN_ARGS \
