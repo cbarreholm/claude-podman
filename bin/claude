@@ -6,6 +6,7 @@ REPO_NAME=evancarroll/claude-podman
 IMAGE="ghcr.io/$REPO_NAME/claude-code:latest"
 NAME="claudecode-$(uuidgen -r | cut -d- -f1)"
 INIT_SCRIPT=""
+INIT_ENV=""
 APK_PACKAGES=""
 PODMAN_ARGS=""
 NETWORK=""
@@ -22,6 +23,9 @@ while [[ $# -gt 0 ]]; do
 			Options:
 			  --local              Use local image 'claude-code:latest' instead of remote
 			  --init-script FILE   Execute initialization script
+			  --init-env LIST      Forward these host env vars (comma or space
+			                       separated names, values read from your shell)
+			                       to the init script only, e.g. for secrets
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
 			  --network NAME       Join a dedicated podman network (created if missing) so
 			                       Claude can reach other containers on it by name via DNS
@@ -46,6 +50,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--init-script)
 		INIT_SCRIPT="$2"
+		shift 2
+		;;
+	--init-env)
+		INIT_ENV="$2"
 		shift 2
 		;;
 	--apk-packages)
@@ -84,7 +92,16 @@ if [ -n "$NETWORK" ]; then
 	NETWORK_ARG="--network $NETWORK"
 fi
 
-podman run \
+# Setup failures must not leave you in a session that silently lacks
+# whatever the setup was supposed to provide: tear the container down
+# and surface the error instead of attaching.
+abort() {
+	echo "$1" >&2
+	podman stop --time 0 "$NAME" >/dev/null 2>&1
+	exit 1
+}
+
+if ! podman run \
 	-v "${HOME}/.claude:/home/claude/.claude" \
 	-v "${HOME}/.claude.json:/home/claude/.claude.json" \
 	-v "${PWD}:${PWD}" \
@@ -97,15 +114,34 @@ podman run \
 	--userns=keep-id:uid=1000,gid=1000 \
 	$NETWORK_ARG \
 	$PODMAN_ARGS \
-	"$IMAGE" "$@"
+	"$IMAGE" "$@"; then
+	echo "failed to start container" >&2
+	exit 1
+fi
 
 if [ -n "$APK_PACKAGES" ]; then
 	APK_PACKAGES=$(echo $APK_PACKAGES | tr -s ', ' ' ')
-	podman exec --user root:root "$NAME" /bin/bash -c "apk update; apk add $APK_PACKAGES"
+	podman exec --user root:root "$NAME" /bin/bash -c "apk update; apk add $APK_PACKAGES" ||
+		abort "--apk-packages failed; not starting the session"
 fi
 if [ -n "$INIT_SCRIPT" ]; then
-	podman cp "$INIT_SCRIPT" "$NAME:/root/init.sh"
-	podman exec --user root:root "$NAME" bash /root/init.sh
+	# Forward named host env vars to the init script. The bare "-e VAR"
+	# form makes podman read the value from this shell's environment, so
+	# the secret never appears in argv (host `ps`) and — because this is
+	# exec rather than run — never lands in `podman inspect` either.
+	INIT_ENV_ARGS=""
+	if [ -n "$INIT_ENV" ]; then
+		for VAR in $(echo "$INIT_ENV" | tr -s ', ' ' '); do
+			if [ -z "${!VAR:-}" ]; then
+				abort "--init-env $VAR is unset or empty in the environment"
+			fi
+			INIT_ENV_ARGS="$INIT_ENV_ARGS -e $VAR"
+		done
+	fi
+	podman cp "$INIT_SCRIPT" "$NAME:/root/init.sh" ||
+		abort "failed to copy init script into the container"
+	podman exec --user root:root $INIT_ENV_ARGS "$NAME" bash /root/init.sh ||
+		abort "init script failed; not starting the session"
 fi
 
 podman container attach "$NAME"
