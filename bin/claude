@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
 		podman run \
 			--rm \
 			--user claude \
-			--userns=keep-id:uid=1001,gid=1001 \
+			--userns=keep-id:uid=1000,gid=1000 \
 			$PODMAN_ARGS \
 			"$IMAGE" --version
 		exit 0
