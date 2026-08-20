@@ -13,6 +13,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # Buildah and podman must share the same storage driver, otherwise
+      # the test step's podman cannot see the image buildah built.
+      STORAGE_DRIVER: vfs
 
     steps:
     - name: Check out repository
@@ -27,14 +31,12 @@ jobs:
 
     - name: Build Image with buildah script
       id: build
-      env:
-        STORAGE_DRIVER: vfs
       run: |
         # Extract <owner>/<repository-name> in lower case
         REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
 
         # Run the build script
-        VERSION=$(./devops/build-image.sh -repo-name $REPO_NAME | tail -n2 | head -n1 | cut -d: -f2)
+        VERSION=$(./devops/build-image.sh --repo-name $REPO_NAME | tail -n2 | head -n1 | cut -d: -f2)
 
         # Tag the image for GHCR
         buildah tag claude-code \
