@@ -10,6 +10,7 @@ INIT_ENV=""
 APK_PACKAGES=""
 PODMAN_ARGS=""
 NETWORK=""
+DNS=""
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -29,6 +30,11 @@ while [[ $# -gt 0 ]]; do
 			  --apk-packages LIST  Install additional Alpine packages (comma or space separated)
 			  --network NAME       Join a dedicated podman network (created if missing) so
 			                       Claude can reach other containers on it by name via DNS
+			  --dns LIST           Use these DNS servers (comma or space separated, max 3)
+			                       instead of the host's, so resolution survives a wifi
+			                       switch, e.g. --dns 1.1.1.1,1.0.0.1. Alpine queries them
+			                       in parallel and takes the first answer, so list one per
+			                       network you use, and only servers that agree.
 			  --podman-arg ARG     Pass additional argument to podman
 			  --version            Show the Claude Code version in the image
 			  --help               Display this help message
@@ -64,6 +70,10 @@ while [[ $# -gt 0 ]]; do
 		NETWORK="$2"
 		shift 2
 		;;
+	--dns)
+		DNS="$2"
+		shift 2
+		;;
 	--podman-arg)
 		PODMAN_ARGS="$PODMAN_ARGS $2"
 		shift 2
@@ -82,6 +92,17 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+# Podman snapshots the host's resolvers into the container at startup and never
+# refreshes them, so switching wifi leaves the session resolving against DNS
+# servers that are no longer reachable. Naming the servers explicitly keeps
+# resolution working across the switch.
+DNS_ARGS=""
+if [ -n "$DNS" ]; then
+	for SERVER in $(echo "$DNS" | tr -s ', ' ' '); do
+		DNS_ARGS="$DNS_ARGS --dns=$SERVER"
+	done
+fi
 
 # Join a dedicated network, creating it if it doesn't exist yet
 NETWORK_ARG=""
@@ -113,6 +134,7 @@ if ! podman run \
 	--user claude \
 	--userns=keep-id:uid=1000,gid=1000 \
 	$NETWORK_ARG \
+	$DNS_ARGS \
 	$PODMAN_ARGS \
 	"$IMAGE" "$@"; then
 	echo "failed to start container" >&2
