@@ -122,7 +122,12 @@ abort() {
 	exit 1
 }
 
+# --init puts a minimal init (catatonit) at PID 1 so orphaned children of
+# Claude's tool calls are reaped. Without it claude is PID 1, nothing reaps,
+# and zombies pile up until the container hits its pids limit and every
+# fork fails with "resource temporarily unavailable".
 if ! podman run \
+	--init \
 	-v "${HOME}/.claude:/home/claude/.claude" \
 	-v "${HOME}/.claude.json:/home/claude/.claude.json" \
 	-v "${PWD}:${PWD}" \
