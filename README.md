@@ -45,6 +45,9 @@ Need to add packages to the container, or run an init script? no problem
 --init-script  ./foobar.sh # copies foobar.sh into the container and executes it as root
 ```
 
+`--init-script` can be repeated: the scripts run in the order given, and the
+session doesn't start if any of them fails.
+
 
 For example, let's say you're using kubernetes and you do want claude to be able to troubleshoot it.
 
