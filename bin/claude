@@ -11,6 +11,9 @@ APK_PACKAGES=""
 PODMAN_ARGS=""
 NETWORK=""
 DNS=""
+# Podman's default (2048) is easy to exhaust with parallel builds or test
+# runners; keep a ceiling so a runaway fork loop still can't take the host down.
+PIDS_LIMIT=8192
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -36,6 +39,8 @@ while [[ $# -gt 0 ]]; do
 			                       switch, e.g. --dns 1.1.1.1,1.0.0.1. Alpine queries them
 			                       in parallel and takes the first answer, so list one per
 			                       network you use, and only servers that agree.
+			  --pids-limit N       Max processes in the container (default 8192,
+			                       -1 for no limit)
 			  --podman-arg ARG     Pass additional argument to podman
 			  --version            Show the Claude Code version in the image
 			  --help               Display this help message
@@ -73,6 +78,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--dns)
 		DNS="$2"
+		shift 2
+		;;
+	--pids-limit)
+		PIDS_LIMIT="$2"
 		shift 2
 		;;
 	--podman-arg)
@@ -129,6 +138,7 @@ abort() {
 # fork fails with "resource temporarily unavailable".
 if ! podman run \
 	--init \
+	--pids-limit "$PIDS_LIMIT" \
 	-v "${HOME}/.claude:/home/claude/.claude" \
 	-v "${HOME}/.claude.json:/home/claude/.claude.json" \
 	-v "${PWD}:${PWD}" \
